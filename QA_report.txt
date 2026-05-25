@@ -1,0 +1,22 @@
+QA report generado por qa_audit.py
+long table shape: (9010, 10)
+samples: 34
+peptidoforms: 265
+regions: 33
+
+Grupos:
+sample_group
+BOT     11
+FLOR     9
+SEN      9
+YNG      5
+
+Ratio sum stats por (region,sample):
+count    1122.000000
+mean        0.978610
+std         0.144746
+min         0.000000
+25%         1.000000
+50%         1.000000
+75%         1.000000
+max         1.000005
