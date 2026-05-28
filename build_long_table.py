@@ -6,19 +6,38 @@ Entrada: TSV con 3 bloques horizontales (Ratio, Area, RT) x 34 muestras,
          'Peptide(Region)' marcan grupo; data rows formato 'Region modification'
          o 'Region peptide_variant' (caso H2A_1_7).
 
+v4.0.0 (2026-05-26): join con phenodata_v4.csv para añadir batch + include_v4.
+                     2 huérfanas técnicas excluidas (samples 6 y 28).
+
 Salida: formato largo tidy con columnas:
   sample_index, sample_name, sample_code, sample_group,
+  batch, date, include_v4,
   region, peptide, peptidoform, ratio, area, retention_time
 """
 
 from __future__ import annotations
 import re
+import hashlib
 from pathlib import Path
 import pandas as pd
 
+__version__ = "4.0.0"
+
 INPUT = Path(r"C:/Users/geope/Downloads/histone_ratios_nucleosoma_completo_para completar.txt")
 OUTDIR = Path(r"D:/AT_virgen/histone_long_table")
+PHENODATA_V4 = OUTDIR / "phenodata_v4.csv"
 OUTDIR.mkdir(parents=True, exist_ok=True)
+
+# Embeber SHA256 del TXT crudo para trazabilidad (T2 v3.0.0 fix)
+def _sha256_file(p: Path) -> str:
+    h = hashlib.sha256()
+    with p.open("rb") as f:
+        for chunk in iter(lambda: f.read(8192), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+INPUT_SHA256 = _sha256_file(INPUT)
+print(f"[build_long_table v{__version__}] input SHA256 = {INPUT_SHA256[:16]}...")
 
 # 1) lectura cruda
 raw = pd.read_csv(INPUT, sep="\t", header=None, dtype=str, keep_default_na=False)
@@ -156,12 +175,33 @@ long = (
     .drop(columns="_row_id")
 )
 
-# orden final de columnas
+# v4.0.0: JOIN con phenodata_v4 para añadir batch + include_v4 ------------
+print(f"\n[v{__version__}] Joining with phenodata_v4.csv...")
+ph_v4 = pd.read_csv(PHENODATA_V4)
+print(f"  phenodata_v4: {len(ph_v4)} filas; "
+      f"incluidas (include_v4=Yes): {(ph_v4['include_v4']=='Yes').sum()}")
+
+ph_join = ph_v4[["sample_index", "batch", "date", "include_v4", "notes"]].copy()
+long = long.merge(ph_join, on="sample_index", how="left")
+
+# Validar: ninguna fila debe quedar sin batch tras el join
+n_missing_batch = long["batch"].isna().sum()
+if n_missing_batch > 0:
+    raise RuntimeError(f"{n_missing_batch} filas sin batch tras join — phenodata incompleto")
+
+# orden final de columnas v4.0.0
 long = long[[
     "sample_index", "sample_name", "sample_code", "sample_group",
+    "batch", "date", "include_v4", "notes",
     "region", "peptide", "peptidoform",
     "ratio", "area", "retention_time",
 ]].sort_values(["region", "peptidoform", "sample_index"]).reset_index(drop=True)
+
+# Resumen del join
+n_incl = (long["include_v4"] == "Yes").sum() // long["peptidoform"].nunique() \
+    if long["peptidoform"].nunique() > 0 else 0
+print(f"  samples include_v4=Yes en long table: {n_incl}")
+print(f"  filas totales en long table: {len(long)}")
 
 print(f"[OK] tabla larga: {long.shape}")
 print(long.head(3).to_string())
@@ -234,6 +274,10 @@ readme = [
     ["sample_name",  "nombre completo 2025017_<biorep>_AT_<grupo>"],
     ["sample_code",  "codigo biologico del replicate (entero entre _ _)"],
     ["sample_group", "grupo experimental: YNG, BOT, FLOR, SEN"],
+    ["batch",        "v4.0.0: batch tecnico A (20250506) o B (20250507)"],
+    ["date",         "v4.0.0: fecha de adquisicion MS (20250506 o 20250507)"],
+    ["include_v4",   "v4.0.0: Yes/No - filtrar por include_v4=='Yes' antes de stats"],
+    ["notes",        "v4.0.0: razon de exclusion si include_v4=='No'"],
     ["region",       "region peptidica (ej. H3_3_8, H4_4_17)"],
     ["peptide",      "secuencia del peptido canonico de la region"],
     ["peptidoform",  "forma peptidica con PTM o variante (ej. H3_3_8 K4me1)"],
