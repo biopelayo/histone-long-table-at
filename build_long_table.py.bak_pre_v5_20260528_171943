@@ -41,14 +41,7 @@ print(f"[build_long_table v{__version__}] input SHA256 = {INPUT_SHA256[:16]}..."
 
 # 1) lectura cruda
 raw = pd.read_csv(INPUT, sep="\t", header=None, dtype=str, keep_default_na=False)
-# Forma flexible para soportar bundle revision_peptidos v2 (post-Tribunal 2026-05-28):
-#   - v1 (pre-Tribunal):  (303, 107) con KGKYAER y LARYNKK
-#   - v5 (post-Tribunal): (315, 107) sin peptidos fantasma, con Fix #3 NaN
-# Columnas fijas (107 = 3 meta + 34 ratio + 1 sep + 34 area + 1 sep + 34 rt)
-# Filas variables segun version del bundle.
-assert raw.shape[1] == 107, f"Columnas inesperadas: {raw.shape[1]} (esperado 107)"
-assert 270 <= raw.shape[0] <= 350, f"Filas fuera de rango razonable: {raw.shape[0]}"
-print(f"[INFO] Bundle detectado por shape: {raw.shape}")
+assert raw.shape == (303, 107), f"Forma inesperada: {raw.shape}"
 
 # 2) cabeceras
 hdr_samples = raw.iloc[0]
